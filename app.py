@@ -60,50 +60,47 @@ def create_dashboard_charts(df, chart_creator):
     categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
     date_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
     
+    # 1. 상관관계 히트맵 (수치형 컬럼이 2개 이상인 경우)
     if len(numeric_cols) >= 2:
-        # 1. 상관관계 히트맵
-        if len(numeric_cols) > 1:
-            fig_heatmap = chart_creator.create_heatmap(df, numeric_cols, "상관관계 히트맵")
-            charts.append(("상관관계 히트맵", fig_heatmap))
-        
-        # 2. 수치형 데이터 분포 (히스토그램)
-        if numeric_cols:
-            selected_numeric = numeric_cols[0] if numeric_cols else None
-            if selected_numeric:
-                fig_hist = chart_creator.create_histogram(df, selected_numeric, 20, f"{selected_numeric} 분포")
-                charts.append((f"{selected_numeric} 분포", fig_hist))
-        
-        # 3. 박스플롯 (범주형 컬럼이 있는 경우)
-        if categorical_cols and numeric_cols:
-            cat_col = categorical_cols[0]
-            num_col = numeric_cols[0]
-            fig_box = chart_creator.create_box_plot(df, cat_col, num_col, f"{cat_col}별 {num_col} 분포")
-            charts.append((f"{cat_col}별 {num_col} 분포", fig_box))
+        fig_heatmap = chart_creator.create_heatmap(df, numeric_cols, "상관관계 히트맵")
+        charts.append(("상관관계 히트맵", fig_heatmap))
     
-    # 4. 막대그래프 (범주형 데이터)
+    # 2. 주요 수치형 데이터 분포 (히스토그램)
+    if numeric_cols:
+        selected_numeric = numeric_cols[0]
+        fig_hist = chart_creator.create_histogram(df, selected_numeric, 20, f"{selected_numeric} 분포")
+        charts.append((f"{selected_numeric} 분포", fig_hist))
+    
+    # 3. 범주별 수치 분포 (박스플롯)
+    if categorical_cols and numeric_cols:
+        cat_col = categorical_cols[0]
+        num_col = numeric_cols[0]
+        fig_box = chart_creator.create_box_plot(df, cat_col, num_col, f"{cat_col}별 {num_col} 분포")
+        charts.append((f"{cat_col}별 {num_col} 분포", fig_box))
+    
+    # 4. 범주별 집계 (막대그래프)
     if categorical_cols and numeric_cols:
         cat_col = categorical_cols[0]
         num_col = numeric_cols[0]
         fig_bar = chart_creator.create_bar_chart(df, cat_col, num_col, title=f"{cat_col}별 {num_col}")
         charts.append((f"{cat_col}별 {num_col}", fig_bar))
     
-    # 5. 파이차트 (범주형 데이터)
+    # 5. 비율 분석 (파이차트)
     if categorical_cols and numeric_cols:
         cat_col = categorical_cols[0]
         num_col = numeric_cols[0]
-        # 파이차트는 값의 합계를 사용
         pie_data = df.groupby(cat_col)[num_col].sum().reset_index()
         fig_pie = chart_creator.create_pie_chart(pie_data, num_col, cat_col, f"{cat_col}별 {num_col} 비율")
         charts.append((f"{cat_col}별 {num_col} 비율", fig_pie))
     
-    # 6. 산점도 (두 수치형 컬럼)
+    # 6. 변수 간 관계 (산점도)
     if len(numeric_cols) >= 2:
         x_col = numeric_cols[0]
         y_col = numeric_cols[1]
         fig_scatter = chart_creator.create_scatter_plot(df, x_col, y_col, title=f"{x_col} vs {y_col}")
         charts.append((f"{x_col} vs {y_col}", fig_scatter))
     
-    # 7. 월별/분기별 집계 차트 (날짜 데이터가 있는 경우)
+    # 7. 시계열 분석 (날짜 데이터가 있는 경우)
     if date_cols and numeric_cols:
         date_col = date_cols[0]
         num_col = numeric_cols[0]
@@ -111,129 +108,66 @@ def create_dashboard_charts(df, chart_creator):
         # 월별 집계
         df_copy = df.copy()
         df_copy['Month'] = df_copy[date_col].dt.to_period('M')
-        monthly_data = df_copy.groupby('Month')[num_col].agg(['sum', 'mean', 'count']).reset_index()
+        monthly_data = df_copy.groupby('Month')[num_col].agg(['sum', 'mean']).reset_index()
         monthly_data['Month'] = monthly_data['Month'].astype(str)
         
         fig_monthly = chart_creator.create_bar_chart(monthly_data, 'Month', 'sum', title=f"월별 {num_col} 합계")
         charts.append((f"월별 {num_col} 합계", fig_monthly))
-        
-        # 분기별 집계
-        df_copy['Quarter'] = df_copy[date_col].dt.to_period('Q')
-        quarterly_data = df_copy.groupby('Quarter')[num_col].agg(['sum', 'mean']).reset_index()
-        quarterly_data['Quarter'] = quarterly_data['Quarter'].astype(str)
-        
-        fig_quarterly = chart_creator.create_bar_chart(quarterly_data, 'Quarter', 'sum', title=f"분기별 {num_col} 합계")
-        charts.append((f"분기별 {num_col} 합계", fig_quarterly))
     
-    # 8. 상위/하위 분석
+    # 8. 상위 분석
     if categorical_cols and numeric_cols:
         cat_col = categorical_cols[0]
         num_col = numeric_cols[0]
         
-        # 상위 10개 분석
         top_data = df.groupby(cat_col)[num_col].sum().sort_values(ascending=False).head(10).reset_index()
         fig_top = chart_creator.create_bar_chart(top_data, cat_col, num_col, title=f"상위 10개 {cat_col}별 {num_col}")
         charts.append((f"상위 10개 {cat_col}별 {num_col}", fig_top))
     
-    # 9. 데이터 분포 분석 (수치형 데이터가 2개 이상인 경우)
-    if len(numeric_cols) >= 2:
-        # 첫 번째 수치형 컬럼의 분포를 다른 컬럼으로 그룹화
-        x_col = numeric_cols[0]
-        y_col = numeric_cols[1]
-        
-        # 구간별 분류
-        df_copy = df.copy()
-        df_copy['Range'] = pd.cut(df_copy[x_col], bins=5, labels=['매우 낮음', '낮음', '보통', '높음', '매우 높음'])
-        range_data = df_copy.groupby('Range')[y_col].mean().reset_index()
-        
-        fig_range = chart_creator.create_bar_chart(range_data, 'Range', y_col, title=f"{x_col} 구간별 {y_col} 평균")
-        charts.append((f"{x_col} 구간별 {y_col} 평균", fig_range))
-    
-    # 10. 성장률 분석 (날짜 데이터가 있는 경우)
-    if date_cols and numeric_cols:
-        date_col = date_cols[0]
-        num_col = numeric_cols[0]
-        
-        # 월별 성장률 계산
-        df_copy = df.copy()
-        df_copy['Month'] = df_copy[date_col].dt.to_period('M')
-        monthly_sum = df_copy.groupby('Month')[num_col].sum().reset_index()
-        monthly_sum['Growth_Rate'] = monthly_sum[num_col].pct_change() * 100
-        
-        # 성장률이 있는 데이터만 필터링
-        growth_data = monthly_sum[monthly_sum['Growth_Rate'].notna()]
-        if not growth_data.empty:
-            growth_data['Month'] = growth_data['Month'].astype(str)
-            fig_growth = chart_creator.create_bar_chart(growth_data, 'Month', 'Growth_Rate', title=f"월별 {num_col} 성장률 (%)")
-            charts.append((f"월별 {num_col} 성장률 (%)", fig_growth))
-    
-    # 11. 평균 vs 중앙값 비교 (수치형 데이터)
-    if numeric_cols:
-        num_col = numeric_cols[0]
-        mean_val = df[num_col].mean()
-        median_val = df[num_col].median()
-        
-        comparison_data = pd.DataFrame({
-            '통계': ['평균', '중앙값'],
-            '값': [mean_val, median_val]
-        })
-        
-        fig_comparison = chart_creator.create_bar_chart(comparison_data, '통계', '값', title=f"{num_col} 평균 vs 중앙값")
-        charts.append((f"{num_col} 평균 vs 중앙값", fig_comparison))
-    
-    # 12. 표준편차 분석 (수치형 데이터가 2개 이상인 경우)
-    if len(numeric_cols) >= 2:
-        std_data = df[numeric_cols].std().reset_index()
-        std_data.columns = ['변수', '표준편차']
-        
-        fig_std = chart_creator.create_bar_chart(std_data, '변수', '표준편차', title="변수별 표준편차")
-        charts.append(("변수별 표준편차", fig_std))
-    
-    # 13. 범주별 평균 비교 (범주형 데이터가 2개 이상인 경우)
-    if len(categorical_cols) >= 2 and numeric_cols:
-        cat1 = categorical_cols[0]
-        cat2 = categorical_cols[1]
-        num_col = numeric_cols[0]
-        
-        # 두 범주형 변수의 조합별 평균
-        combo_data = df.groupby([cat1, cat2])[num_col].mean().reset_index()
-        combo_data['조합'] = combo_data[cat1] + ' - ' + combo_data[cat2]
-        
-        fig_combo = chart_creator.create_bar_chart(combo_data, '조합', num_col, title=f"{cat1} x {cat2} 조합별 {num_col} 평균")
-        charts.append((f"{cat1} x {cat2} 조합별 {num_col} 평균", fig_combo))
-    
-    # 14. 분위수 분석 (수치형 데이터)
-    if numeric_cols:
-        num_col = numeric_cols[0]
-        quantiles = df[num_col].quantile([0.25, 0.5, 0.75, 0.9, 0.95, 0.99]).reset_index()
-        quantiles.columns = ['분위수', '값']
-        quantiles['분위수'] = quantiles['분위수'] * 100
-        
-        fig_quantile = chart_creator.create_bar_chart(quantiles, '분위수', '값', title=f"{num_col} 분위수 분석")
-        charts.append((f"{num_col} 분위수 분석", fig_quantile))
-    
-    # 15. 이상치 탐지 (박스플롯 기반)
-    if numeric_cols:
-        num_col = numeric_cols[0]
-        Q1 = df[num_col].quantile(0.25)
-        Q3 = df[num_col].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        
-        outliers = df[(df[num_col] < lower_bound) | (df[num_col] > upper_bound)]
-        normal_data = df[(df[num_col] >= lower_bound) & (df[num_col] <= upper_bound)]
-        
-        outlier_summary = pd.DataFrame({
-            '구분': ['정상 데이터', '이상치'],
-            '개수': [len(normal_data), len(outliers)],
-            '비율': [len(normal_data)/len(df)*100, len(outliers)/len(df)*100]
-        })
-        
-        fig_outlier = chart_creator.create_bar_chart(outlier_summary, '구분', '개수', title=f"{num_col} 이상치 분석")
-        charts.append((f"{num_col} 이상치 분석", fig_outlier))
-    
     return charts
+
+def display_dashboard(df, chart_creator):
+    """개선된 대시보드 표시"""
+    st.header("📊 데이터 대시보드")
+    
+    # 데이터 요약 정보
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("총 행 수", len(df))
+    with col2:
+        st.metric("총 열 수", len(df.columns))
+    with col3:
+        numeric_count = len(df.select_dtypes(include=['number']).columns)
+        st.metric("수치형 컬럼", numeric_count)
+    with col4:
+        categorical_count = len(df.select_dtypes(include=['object']).columns)
+        st.metric("범주형 컬럼", categorical_count)
+    
+    # 대시보드 차트 생성
+    dashboard_charts = create_dashboard_charts(df, chart_creator)
+    
+    if dashboard_charts:
+        st.markdown("---")
+        st.subheader("📈 주요 분석 차트")
+        
+        # 차트를 2x2 그리드로 배치
+        for i in range(0, len(dashboard_charts), 2):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                title, fig = dashboard_charts[i]
+                st.markdown(f"**{title}**")
+                st.plotly_chart(fig, use_container_width=True, height=400)
+            
+            if i + 1 < len(dashboard_charts):
+                with col2:
+                    title, fig = dashboard_charts[i + 1]
+                    st.markdown(f"**{title}**")
+                    st.plotly_chart(fig, use_container_width=True, height=400)
+            else:
+                with col2:
+                    st.empty()
+    else:
+        st.warning("대시보드를 생성할 수 있는 충분한 데이터가 없습니다.")
 
 def display_advanced_analysis(df, analyzer):
     """고급 분석 결과 표시"""
@@ -243,119 +177,96 @@ def display_advanced_analysis(df, analyzer):
     with st.spinner("전문적인 데이터 분석을 수행하고 있습니다..."):
         report = analyzer.create_analysis_report(df)
     
-    # 1. 기술통계
-    st.subheader("📊 기술통계 분석")
-    desc_stats = report['descriptive_statistics']
+    # 탭으로 분석 결과 구분
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 기술통계", "🔗 상관관계", "⚠️ 이상치/정규성", "📈 시계열/군집"])
     
-    for col, stats in desc_stats.items():
-        with st.expander(f"{col} 기술통계"):
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("평균", f"{stats['mean']:.2f}")
-                st.metric("중앙값", f"{stats['median']:.2f}")
-            with col2:
-                st.metric("표준편차", f"{stats['std']:.2f}")
-                st.metric("분산", f"{stats['std']**2:.2f}")
-            with col3:
-                st.metric("최소값", f"{stats['min']:.2f}")
-                st.metric("최대값", f"{stats['max']:.2f}")
-            with col4:
-                st.metric("왜도", f"{stats['skewness']:.2f}")
-                st.metric("첨도", f"{stats['kurtosis']:.2f}")
-    
-    # 2. 상관관계 분석
-    st.subheader("🔗 상관관계 분석")
-    corr_matrix, p_values = report['correlation_analysis']
-    
-    if not corr_matrix.empty:
-        st.write("**상관계수 행렬**")
-        st.dataframe(corr_matrix.round(3))
+    with tab1:
+        st.subheader("📊 기술통계 분석")
+        desc_stats = report['descriptive_statistics']
         
-        # 유의한 상관관계 표시
-        significant_correlations = []
-        for i in corr_matrix.columns:
-            for j in corr_matrix.columns:
-                if i != j and p_values.get(i, {}).get(j, 1) < 0.05:
-                    significant_correlations.append({
-                        '변수1': i,
-                        '변수2': j,
-                        '상관계수': corr_matrix.loc[i, j],
-                        'p값': p_values[i][j]
-                    })
+        for col, stats in desc_stats.items():
+            with st.expander(f"{col} 기술통계"):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("평균", f"{stats['mean']:.2f}")
+                    st.metric("중앙값", f"{stats['median']:.2f}")
+                with col2:
+                    st.metric("표준편차", f"{stats['std']:.2f}")
+                    st.metric("분산", f"{stats['std']**2:.2f}")
+                with col3:
+                    st.metric("최소값", f"{stats['min']:.2f}")
+                    st.metric("최대값", f"{stats['max']:.2f}")
+                with col4:
+                    st.metric("왜도", f"{stats['skewness']:.2f}")
+                    st.metric("첨도", f"{stats['kurtosis']:.2f}")
+    
+    with tab2:
+        st.subheader("🔗 상관관계 분석")
+        corr_matrix, p_values = report['correlation_analysis']
         
-        if significant_correlations:
-            st.write("**유의한 상관관계 (p < 0.05)**")
-            sig_df = pd.DataFrame(significant_correlations)
-            st.dataframe(sig_df.round(4))
+        if not corr_matrix.empty:
+            st.write("**상관계수 행렬**")
+            st.dataframe(corr_matrix.round(3))
+            
+            # 유의한 상관관계 표시
+            significant_correlations = []
+            for i in corr_matrix.columns:
+                for j in corr_matrix.columns:
+                    if i != j and p_values.get(i, {}).get(j, 1) < 0.05:
+                        significant_correlations.append({
+                            '변수1': i,
+                            '변수2': j,
+                            '상관계수': corr_matrix.loc[i, j],
+                            'p값': p_values[i][j]
+                        })
+            
+            if significant_correlations:
+                st.write("**유의한 상관관계 (p < 0.05)**")
+                sig_df = pd.DataFrame(significant_correlations)
+                st.dataframe(sig_df.round(4))
     
-    # 3. 이상치 분석
-    st.subheader("⚠️ 이상치 분석")
-    outlier_analysis = report['outlier_analysis']
-    
-    for col, outlier_info in outlier_analysis.items():
-        with st.expander(f"{col} 이상치 분석"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("이상치 개수", outlier_info['outlier_count'])
-            with col2:
-                st.metric("이상치 비율", f"{outlier_info['outlier_percent']:.2f}%")
-            with col3:
-                st.metric("정상 데이터", len(df) - outlier_info['outlier_count'])
-    
-    # 4. 정규성 검정
-    st.subheader("📈 정규성 검정")
-    normality_test = report['normality_test']
-    
-    for col, test_results in normality_test.items():
-        with st.expander(f"{col} 정규성 검정"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("**Shapiro-Wilk 검정**")
-                st.write(f"통계량: {test_results['shapiro_statistic']:.4f}")
-                st.write(f"p값: {test_results['shapiro_p_value']:.4f}")
-                st.write(f"정규분포 여부: {'예' if test_results['is_normal_shapiro'] else '아니오'}")
-            with col2:
-                st.write("**Kolmogorov-Smirnov 검정**")
-                st.write(f"통계량: {test_results['ks_statistic']:.4f}")
-                st.write(f"p값: {test_results['ks_p_value']:.4f}")
-                st.write(f"정규분포 여부: {'예' if test_results['is_normal_ks'] else '아니오'}")
-    
-    # 5. 시계열 분석 (날짜 데이터가 있는 경우)
-    if 'trend_analysis' in report:
-        st.subheader("📈 시계열 분석")
+    with tab3:
+        col1, col2 = st.columns(2)
         
-        # 트렌드 분석
-        trend_analysis = report['trend_analysis']
-        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("기울기", f"{trend_analysis['slope']:.4f}")
+            st.subheader("⚠️ 이상치 분석")
+            outlier_analysis = report['outlier_analysis']
+            
+            for col, outlier_info in outlier_analysis.items():
+                with st.expander(f"{col} 이상치"):
+                    st.metric("이상치 개수", outlier_info['outlier_count'])
+                    st.metric("이상치 비율", f"{outlier_info['outlier_percent']:.2f}%")
+        
         with col2:
-            st.metric("R²", f"{trend_analysis['r_squared']:.4f}")
-        with col3:
-            st.metric("추세 방향", trend_analysis['trend_direction'])
-        with col4:
-            st.metric("MSE", f"{trend_analysis['mse']:.4f}")
-        
-        # 계절성 분석
-        if 'seasonal_analysis' in report:
-            seasonal_analysis = report['seasonal_analysis']
-            st.write("**계절성 강도**:", f"{seasonal_analysis['seasonal_strength']:.4f}")
+            st.subheader("📈 정규성 검정")
+            normality_test = report['normality_test']
+            
+            for col, test_results in normality_test.items():
+                with st.expander(f"{col} 정규성"):
+                    st.write(f"**Shapiro-Wilk**: {'정규분포' if test_results['is_normal_shapiro'] else '비정규분포'}")
+                    st.write(f"**KS 검정**: {'정규분포' if test_results['is_normal_ks'] else '비정규분포'}")
     
-    # 6. 군집 분석
-    if 'cluster_analysis' in report:
-        st.subheader("🎯 군집 분석")
-        cluster_analysis = report['cluster_analysis']
+    with tab4:
+        col1, col2 = st.columns(2)
         
-        col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("군집 수", cluster_analysis['n_clusters'])
+            if 'trend_analysis' in report:
+                st.subheader("📈 시계열 분석")
+                trend_analysis = report['trend_analysis']
+                st.metric("기울기", f"{trend_analysis['slope']:.4f}")
+                st.metric("R²", f"{trend_analysis['r_squared']:.4f}")
+                st.metric("추세 방향", trend_analysis['trend_direction'])
+        
         with col2:
-            st.metric("군집 크기", cluster_analysis['cluster_sizes'])
-        with col3:
-            st.metric("Inertia", f"{cluster_analysis['inertia']:.2f}")
+            if 'cluster_analysis' in report:
+                st.subheader("🎯 군집 분석")
+                cluster_analysis = report['cluster_analysis']
+                st.metric("군집 수", cluster_analysis['n_clusters'])
+                st.metric("Inertia", f"{cluster_analysis['inertia']:.2f}")
     
-    # 7. 재무 분석
+    # 재무 분석 (별도 섹션)
     if 'financial_analysis' in report and report['financial_analysis']:
+        st.markdown("---")
         st.subheader("💰 재무 분석")
         financial_analysis = report['financial_analysis']
         
@@ -363,19 +274,6 @@ def display_advanced_analysis(df, analyzer):
         for i, (metric, value) in enumerate(financial_analysis.items()):
             with metrics_cols[i]:
                 st.metric(metric.replace('_', ' ').title(), f"{value:.2f}%")
-    
-    # 8. PCA 분석
-    if 'pca_analysis' in report:
-        st.subheader("🔍 주성분 분석 (PCA)")
-        pca_analysis = report['pca_analysis']
-        
-        st.write("**설명된 분산 비율**")
-        for i, ratio in enumerate(pca_analysis['explained_variance_ratio']):
-            st.write(f"주성분 {i+1}: {ratio:.4f} ({ratio*100:.2f}%)")
-        
-        st.write("**누적 설명 분산 비율**")
-        for i, ratio in enumerate(pca_analysis['cumulative_variance_ratio']):
-            st.write(f"주성분 {i+1}까지: {ratio:.4f} ({ratio*100:.2f}%)")
 
 def main():
     # 헤더
@@ -426,44 +324,11 @@ def main():
                 df = excel_reader.get_sheet_data(selected_sheet)
                 data_info = excel_reader.get_data_info(selected_sheet)
                 
-                # 데이터 정보 표시
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("행 수", data_info.get('shape', [0, 0])[0])
-                with col2:
-                    st.metric("열 수", data_info.get('shape', [0, 0])[1])
-                with col3:
-                    st.metric("수치형 컬럼", len(data_info.get('numeric_columns', [])))
-                with col4:
-                    st.metric("범주형 컬럼", len(data_info.get('categorical_columns', [])))
-                
                 # 탭 생성
                 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 대시보드", "📈 차트 생성", "📋 데이터 보기", "📈 요약 통계", "🔍 데이터 분석", "🔬 고급 분석"])
                 
                 with tab1:
-                    st.header("📊 자동 대시보드")
-                    st.markdown("데이터를 분석하여 자동으로 생성된 차트들입니다.")
-                    
-                    # 대시보드 차트 생성
-                    dashboard_charts = create_dashboard_charts(df, chart_creator)
-                    
-                    if dashboard_charts:
-                        # 2x2 그리드로 차트 배치
-                        for i in range(0, len(dashboard_charts), 2):
-                            col1, col2 = st.columns(2)
-                            
-                            with col1:
-                                title, fig = dashboard_charts[i]
-                                st.subheader(title)
-                                st.plotly_chart(fig, use_container_width=True)
-                            
-                            if i + 1 < len(dashboard_charts):
-                                with col2:
-                                    title, fig = dashboard_charts[i + 1]
-                                    st.subheader(title)
-                                    st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.warning("대시보드를 생성할 수 있는 충분한 데이터가 없습니다.")
+                    display_dashboard(df, chart_creator)
                 
                 with tab2:
                     st.header("차트 생성")
